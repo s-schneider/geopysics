@@ -86,7 +86,10 @@ Read in velocity model data and plot it
 
 Vp, Vp0 = load_model('migration')
 
-plot_velocity_model(Vp, Vp0)
+dx=24
+dz=24
+
+plot_velocity_model(Vp, Vp0, dx, dz)
 
 """
 PART 2 :
@@ -98,9 +101,10 @@ is solved using finite differences for a defined initial wavefield.
 calculate time step dt from stability crierion for finite difference
 solution of the wave equation.
 """
-"""
-dt = 0.2*min(min(dz./velocityModel/sqrt(2)));
 
+dt = 0.2 * min(min(dz/Vp/np.sqrt(2)))
+
+"""
 % determine time samples nt from wave travelime to depth and back to
 % surface
 vmin = min(velocityModel(:));
