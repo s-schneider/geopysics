@@ -86,8 +86,8 @@ Read in velocity model data and plot it
 
 Vp, Vp0 = load_model('migration')
 
-dx=24
-dz=24
+dx = 24
+dz = 24
 
 plot_velocity_model(Vp, Vp0, dx, dz)
 
