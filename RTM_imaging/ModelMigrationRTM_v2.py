@@ -1,5 +1,5 @@
 from RTM_imaging.data import Marmousi, migration
-from RTM_imaging.functions import ricker, fm2d, generate_shots
+from RTM_imaging.functions import generate_shots
 import matplotlib.pyplot as plt
 import numpy as np
 
