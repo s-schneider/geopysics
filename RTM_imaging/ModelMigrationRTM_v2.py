@@ -1,6 +1,8 @@
 from RTM_imaging.data import Marmousi, migration
-import numpy as np
+from RTM_imaging.functions import ricker, fm2d, generate_shots
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 """
 Seismic Migration Example - Layered & Marmousi Models
@@ -47,16 +49,18 @@ def plot_velocity_model(Vp, Vp0, dx=24, dz=24):
     x = np.arange(1, nx+1) * dx
     z = np.arange(1, nz+1) * dz
 
-    fig, ax = plt.subplots()
+    fig = plt.figure()
     ax = range(3)
     cbar = range(3)
     clim = [-1000, 1000]
 
     ax[0] = plt.subplot2grid((18, 18), (0, 0), colspan=6, rowspan=6)
     iVp = ax[0].imshow(Vp, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
-    ax[0].plot(x[0], z[0], 'x')
+    ax[0].plot(x[0], z[0], '^', color='white')  # , mew=10, ms=15)
     ax[0].set_title('c(x)')
     ax[0].set_xlabel('Distance (m)')
+    ax[0].set_xlim(dx, nx*dx)
+    ax[0].set_ylim(nz*dz, 0)
     ax[0].set_ylabel('Depth (m)')
     cbar[0] = fig.colorbar(iVp)
 
@@ -103,25 +107,25 @@ def set_FD_params(Vp, V0, dx=24, dz=24):
                    ))
 
     Vm = np.hstack((
-                   V,
+                   Vm,
                    np.matlib.repmat(Vm[:, -1], 20, 1).transpose()
                    ))
 
     Vm0 = np.vstack((
                    np.matlib.repmat(V0[0], 20, 1),
-                   Vp,
+                   V0,
                    np.matlib.repmat(V0[-1], 20, 1)
                    ))
 
     Vm0 = np.hstack((
-                   V,
+                   Vm0,
                    np.matlib.repmat(Vm0[:, -1], 20, 1).transpose()
                    ))
 
     Vm = Vm.transpose()
     Vm0 = Vm0.transpose()
 
-    return Vm, Vm0
+    return Vm, Vm0, t, dt, nt
 
 
 """
@@ -148,98 +152,18 @@ calculate time step dt from stability crierion for finite difference
 solution of the wave equation.
 """
 
-Vm, Vm0 = set_FD_params(Vp, V0)
-
-
-
-
+Vm, Vm0, t, dt, nt = set_FD_params(Vp, Vp0)
 
 # Define frequency parameter for ricker wavelet
-f = 60
-%%
-%%%%
-%%%% PART 3 :
-%%%%
-%% Generate shots and save to file
 
 
-data = zeros(size(nt,nx));
+"""
+PART 3 :
 
+Generate shots and save to file
+"""
+generate_shots(Vp, Vm, Vm0, dt, nt)
 
-figure(gcf)
-
-figure
-subplot(2,2,1)
-imagesc(x,z,velocityModel)
-xlabel('Distance (m)'); ylabel('Depth (m)');
-title('Velocity Model');
-hold on
-hshot = plot(x(1),z(1),'w*');
-hold off
-colormap(gray)
-colormap(seismic(1024))
-
-%nxi = nx;
-nxi = 1;
-for ixs = 21:21+nxi % shot loop
-    % initial wavefield
-    rw = ricker(f,nz+40,dt,dt*ixs,0);
-    rw = rw(1:nz+20,:);
-
-    % generate shot records
-    ixs
-    tic
-    [data, snapshot] = fm2d(V,rw,nz,dz,nx,dx,nt,dt);
-    toc
-    tic
-    [data0, snapshot0] = fm2d(V0,rw,nz,dz,nx,dx,nt,dt);
-    toc
-
-    data = data(21:end-20,:)';
-    data0 = data0(21:end-20,:)';
-    dataS = data - data0;
-
-%     save(['Marmousi/snapshot0',num2str(ixs-20),'.mat'],'snapshot0');
-%     save(['Marmousi/shotfdm',num2str(ixs-20),'.mat'],'data')
-%     save(['Marmousi/shotfdmS',num2str(ixs-20),'.mat'],'dataS')
-
-%     % plot initial wavefield
-    set(hshot,'XData',x(ixs-20),'YData',z(1));
-    subplot(2,2,2)
-    imagesc(x,z,rw(1:end-20,21:end-20))
-    xlabel('Distance (m)'); ylabel('Depth (m)');
-    title(['Shot ',num2str(ixs-20),' at ',num2str(x(ixs-20)),' m']);
-    colormap(seismic(1024))
-
-    if ismember(ixs-20,[1 nx/2 nx])
-        start = 1;
-    else
-        start = nt;
-    end
-
-    for i = start:10:nt
-        % plot shot record evolution
-        ds = zeros(nt,nx);
-        ds(1:i,:) = data(1:i,:);
-        subplot(2,2,3)
-        imagesc(x,t,ds)
-        xlabel('Distance (m)'), ylabel('Time (s)')
-        title('Shot Record')
-        %caxis([-0.5 0.5]) % this for layered model
-        caxis([-5 5]) % this for Marmousi model
-
-        % plot wave propagation
-        subplot(2,2,4)
-        imagesc(x,z,snapshot(1:end-20,21:end-20,i))
-        xlabel('Distance (m)'), ylabel('Depth (m)')
-        title(['Wave Propagation t = ',num2str(t(i),'%10.3f')])
-        %caxis([-5 5]) % this for layered model
-        caxis([-50 50]) % this for Marmousi model
-
-
-        drawnow;
-    end
-end %shot loop
 
 """
 %%
