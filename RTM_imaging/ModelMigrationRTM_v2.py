@@ -78,6 +78,52 @@ def plot_velocity_model(Vp, Vp0, dx=24, dz=24):
     return
 
 
+def set_FD_params(Vp, V0, dx=24, dz=24):
+    Vp = Vp.transpose()
+    V0 = V0.transpose()
+
+    nz, nx = Vp.shape[:]
+
+    Mdz = np.ones(Vp.shape) * dz
+    dt = 0.2 * (Mdz/Vp/np.sqrt(2)).min()
+
+    vmin = Vp.min()
+
+    # determine time samples nt from wave travelime to depth and back to
+    # surface
+    nt = int(np.round(np.sqrt((dx*nx)**2 + (dz*nx)**2) * (2/vmin/dt) + 1))
+    t = np.arange(0, nt)*dt
+
+    # add region around model for applying absorbing boundary conditions (20
+    # nodes wide)
+    Vm = np.vstack((
+                   np.matlib.repmat(Vp[0], 20, 1),
+                   Vp,
+                   np.matlib.repmat(Vp[-1], 20, 1)
+                   ))
+
+    Vm = np.hstack((
+                   V,
+                   np.matlib.repmat(Vm[:, -1], 20, 1).transpose()
+                   ))
+
+    Vm0 = np.vstack((
+                   np.matlib.repmat(V0[0], 20, 1),
+                   Vp,
+                   np.matlib.repmat(V0[-1], 20, 1)
+                   ))
+
+    Vm0 = np.hstack((
+                   V,
+                   np.matlib.repmat(Vm0[:, -1], 20, 1).transpose()
+                   ))
+
+    Vm = Vm.transpose()
+    Vm0 = Vm0.transpose()
+
+    return Vm, Vm0
+
+
 """
 PART 1 :
 Read in velocity model data and plot it
@@ -102,26 +148,14 @@ calculate time step dt from stability crierion for finite difference
 solution of the wave equation.
 """
 
-dt = 0.2 * min(min(dz/Vp/np.sqrt(2)))
+Vm, Vm0 = set_FD_params(Vp, V0)
 
-"""
-% determine time samples nt from wave travelime to depth and back to
-% surface
-vmin = min(velocityModel(:));
-nt = round(sqrt((dx*nx)^2 + (dz*nx)^2)*2/vmin/dt + 1);
-t  = (0:nt-1).*dt;
 
-% add region around model for applying absorbing boundary conditions (20
-% nodes wide)
-V = [repmat(velocityModel(:,1),1,20) velocityModel repmat(velocityModel(:,end),1,20)];
-V(end+1:end+20,:) = repmat(V(end,:),20,1);
-V0 = [repmat(velocityModel0(:,1),1,20) velocityModel0 repmat(velocityModel0(:,end),1,20)];
-V0(end+1:end+20,:) = repmat(V0(end,:),20,1);
 
-% Define frequency parameter for ricker wavelet
-f  = 60;
-%f  = 40;
 
+
+# Define frequency parameter for ricker wavelet
+f = 60
 %%
 %%%%
 %%%% PART 3 :
@@ -207,7 +241,7 @@ for ixs = 21:21+nxi % shot loop
     end
 end %shot loop
 
-
+"""
 %%
 %%%%
 %%%% PART 4 :
