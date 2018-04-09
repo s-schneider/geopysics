@@ -228,64 +228,78 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
 
     snapshot = np.zeros((nz, nx, nt))
 
-    """
     for it in np.arange(2, nt):
         # finite differencing on interior
-        fdm(iz,ix,3) = b(iz,ix).*fdm(iz,ix,2) - fdm(iz,ix,1) + ...
-            a(iz,ix).*(fdm(iz,ix+1,2) + fdm(iz,ix-1,2) + ...
-            fdm(iz+1,ix,2) + fdm(iz-1,ix,2));
+        fdm[iz, ix, 2] = (
+                          b[iz, ix] * fdm[iz, ix, 1] - fdm[iz, ix, 0] +
+                          a[iz, ix] * (fdm[iz, ix+1, 1] + fdm[iz, ix-1, 1] +
+                                       fdm[iz+1, ix, 1] + fdm[iz-1, ix, 1])
+                          )
 
         # finite differencing at ix = 1 and ix = nx (surface, bottom)
-        fdm(iz,1,3) = b(iz,1).*fdm(iz,1,2) - fdm(iz,1,1) + ...
-            a(iz,1).*(fdm(iz,2,2) + fdm(iz+1,1,2) + fdm(iz-1,1,2));
-        fdm(iz,nx,3) = b(iz,nx).*fdm(iz,nx,2) - fdm(iz,nx,1) + ...
-            a(iz,nx).*(fdm(iz,nx-1,2) + fdm(iz+1,nx,2) + ...
-            fdm(iz-1,nx,2));
+        fdm[iz, 0, 2] = (
+                         b[iz, 0] * fdm[iz, 0, 1] - fdm[iz, 0, 0] +
+                         a[iz, 0] * (fdm[iz, 1, 1] + fdm[iz+1, 0, 1] +
+                                     fdm[iz-1, 0, 1])
+                        )
+
+        fdm[iz, nx, 2] = (
+                          b[iz, nx] * fdm[iz, nx, 1] - fdm[iz, nx, 0] +
+                          a[iz, nx] * (fdm[iz, nx-1, 1] + fdm[iz+1, nx, 1] +
+                                       fdm[iz-1, nx, 1])
+                         )
 
         # finite differencing at iz = 1 and iz = nz (z boundaries)
-        fdm(1,ix,3) = b(1,ix).*fdm(1,ix,2) -  fdm(1,ix,1) + ...
-            a(1,ix).*(fdm(2,ix,2) + fdm(1,ix+1,2) + fdm(1,ix-1,2));
-        fdm(nz,ix,3)= b(nz,ix).*fdm(nz,ix,2)- fdm(nz,ix,1) + ...
-            a(nz,ix).*(fdm(nz-1,ix,2) + fdm(nz,ix+1,2) + fdm(nz,ix-1,2));
+        fdm[0, ix, 2] = (
+                         b[0, ix] * fdm[0, ix, 1] - fdm[0, ix, 0] +
+                         a[0, ix] * (fdm[1, ix, 1] + fdm[0, ix+1, 1] +
+                                     fdm[0, ix-1, 1])
+                        )
+
+        fdm[nz, ix, 2] = (
+                          b[nz, ix] * fdm[nz, ix, 1] - fdm[nz, ix, 0] +
+                          a[nz, ix] * (fdm[nz-1, ix, 1] + fdm[nz, ix+1, 1] +
+                                       fdm[nz, ix-1, 1])
+                         )
 
         # finite differencing at four corners (1,1), (nz,1), (1,nx), (nz,nx)
-        fdm(1 ,1 ,3) = b(1 , 1).*fdm(1 ,1 ,2) -fdm(1 ,1 ,1) + ...
-            a(1 , 1)*(fdm(2,1,2) + fdm(1,2,2));
-        fdm(nz,1 ,3) = b(nz, 1).*fdm(nz,1 ,2) -fdm(nz,1 ,1) + ...
-            a(nz, 1)*(fdm(nz,2,2) +fdm(nz-1,1,2));
-        fdm(1 ,nx,3) = b(1 ,nx).*fdm(1 ,nx,2) -fdm(1 ,nx,1) + ...
-            a(1 ,nx)*(fdm(1,nx-1,2) +fdm(2,nx,2));
-        fdm(nz,nx,3) = b(nz,nx).*fdm(nz,nx,2) -fdm(nz,nx,1) + ...
-            a(nz,nx)*(fdm(nz-1,nx,2) +fdm(nz,nx-1,2));
+        fdm[0, 0, 2] = (
+                        b[0, 0] * fdm[0, 0, 1] - fdm[0, 0, 0] +
+                        a[0, 0] * (fdm[1, 0, 1] + fdm[0, 1, 1])
+                       )
+        fdm[nz, 0, 2] = (
+                         b[nz, 0] * fdm[nz, 0, 1] - fdm[nz, 0, 0] +
+                         a[nz, 1] * (fdm[nz, 1, 1] + fdm[nz-1, 0, 1])
+                        )
+        fdm[0, nx, 2] = (
+                         b[0, nx] * fdm[0, nx, 1] - fdm[0, nx, 0] +
+                         a[0, nx] * (fdm[0, nx-1, 1] + fdm[2, nx, 1])
+                        )
+        fdm[nz, nx, 2] = (
+                          b[nz, nx] * fdm[nz, nx, 0] - fdm[nz, nx, 0] +
+                          a[nz, nx] * (fdm[nz-1, nx, 1] + fdm[nz, nx-1, 1])
+                         )
 
         # update fdm for next time iteration
-        fdm(:,:,1) = fdm(:,:,2);
-        fdm(:,:,2) = fdm(:,:,3);
+        fdm[:, :, 0] = fdm[:, :, 1]
+        fdm[:, :, 1] = fdm[:, :, 2]
 
-        % apply absorbing boundary conditions to 3 sides (not surface)
-        for ixb = 1:20
-            fdm(izb,ixb,1) = boundary(ixb).*fdm(izb,ixb,1);
-            fdm(izb,ixb,2) = boundary(ixb).*fdm(izb,ixb,2);
-            ixb2 = nx-20+ixb;
-            fdm(izb,ixb2,1) = boundary(nx-ixb2+1).*fdm(izb,ixb2,1);
-            fdm(izb,ixb2,2) = boundary(nx-ixb2+1).*fdm(izb,ixb2,2);
-            izb2 = nz-20+ixb;
-            fdm(izb2,:,1) = boundary(nz-izb2+1).*fdm(izb2,:,1);
-            fdm(izb2,:,2) = boundary(nz-izb2+1).*fdm(izb2,:,2);
-        end
+        # apply absorbing boundary conditions to 3 sides (not surface)
+        for ixb in range(1, 21):
+            fdm[izb, ixb, 0] = boundary[ixb] * fdm[izb, ixb, 0]
+            fdm[izb, ixb, 1] = boundary[ixb] * fdm[izb, ixb, 1]
+            ixb2 = nx-20+ixb
+            fdm[izb, ixb2, 0] = boundary[nx-ixb2+1] * fdm[izb, ixb2, 0]
+            fdm[izb, ixb2, 1] = boundary[nx-ixb2+1] * fdm[izb, ixb2, 1]
+            izb2 = nz-20+ixb
+            fdm[izb2, :, 0] = boundary[nz-izb2+1] * fdm[izb2, :, 0]
+            fdm[izb2, :, 1] = boundary[nz-izb2+1] * fdm[izb2, :, 1]
 
-        % update data
-        data(:,it) = fdm(1,:,2);
+        # update data
+        data[:, it] = fdm[0, :, 1]
 
-        %{
-        subplot(2,2,3),imagesc(data');
-        title(['Time index: ',num2str(it)])
-        drawnow
-        %}
-        snapshot(:,:,it) = fdm(:,:,2);
-    end % time loop
+        snapshot[:, :, it] = fdm[:, :, 1]
 
-    %data = data(21:nx-20,:);
-    """
+    data = data[21:nx-20, :]
 
-    return
+    return data, snapshot
