@@ -62,16 +62,16 @@ def mPrismCart(x, y, z, mass, xi=None, yi=None, zi=None):
                          (x-xi[i])*(y-yj[j]) *
                          np.log(abs((z-zk[k]+wijk)/np.sqrt((x-xi[i])**2
                                 + (y-yj[j])**2)))
-                         + (y-yj[j])*(z-zk[k]) *
 
+                         + (y-yj[j])*(z-zk[k]) *
                          np.log(abs((x-xi[i]+wijk)/np.sqrt((y-yj[j])**2
                                 + (z-zk[k])**2)))
-                         + (z-zk[k])*(x-xi[i]) *
 
+                         + (z-zk[k])*(x-xi[i]) *
                          np.log(abs((y-yj[j]+wijk)/np.sqrt((z-zk[k])**2
                                 + (x-xi[i])**2)))
 
-                         - 1/2*(
+                         - (
                                 (x-xi[i])**2 *
                                 math.atan2((y-yj[j])*(z-zk[k]), (x-xi[i])*wijk)
                                 +
@@ -80,7 +80,7 @@ def mPrismCart(x, y, z, mass, xi=None, yi=None, zi=None):
                                 +
                                 (z-zk[k])**2 *
                                 math.atan2((x-xi[i])*(y-yj[j]), (z-zk[k])*wijk)
-                                )
+                                )/2.
                          )
                 P = P + G*Rho * (-1)**(i+1 + j+1 + k+1) * V_tmp
 
