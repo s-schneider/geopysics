@@ -1,7 +1,7 @@
 import numpy as np
 import sys
-from Gravity.functions import mPrismCart, mpoinCart
-from Gravity.plotting import plot_gravity
+from Gravity.functions import mPrismCart, mpoinCart, mHollowSphere
+from Gravity.plotting import plot_gravity, plot_hollow_sphere
 
 
 """
@@ -77,4 +77,10 @@ def model_gravity(object='all', scal=1):
     if object in ['point', 'all']:
         title = 'Point-Mass Model | height = %f m' % z
         plot_gravity(Vxx2, Vxy2, Vxz2, Vyy2, Vyz2, Vzz2, P2, Vz2, title)
+    return
+
+
+def hollow_sphere(a=3, b=6):
+    r, g = mHollowSphere(a, b, N=250)
+    plot_hollow_sphere(a, b, r, g)
     return

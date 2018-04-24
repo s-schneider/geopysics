@@ -269,3 +269,25 @@ def mPrismCart(x, y, z, mass, xi=None, yi=None, zi=None):
     #############################
 
     return Vxx, Vxy, Vxz, Vyy, Vyz, Vzz, P, Vz
+
+
+def mHollowSphere(a=3, b=6, N=250):
+    """
+    a, b in meters, and points to plot
+    """
+    a = float(a)
+    b = float(b)
+    N = int(N)
+    rmin = 0
+    rmax = 2*b
+    dr = (rmax-rmin)/float(N)
+    r = np.zeros((N))
+    g = np.zeros((N))
+    for i in range(N):
+        r[i] = rmin+i*dr
+        g[i] = 0
+        if r[i] >= a and r[i] < b:
+            g[i] = (r[i]-a)/(b-a)/np.power(r[i], 2)
+        elif r[i] >= b:
+            g[i] = 1/np.power(r[i], 2)
+    return r, g

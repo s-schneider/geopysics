@@ -47,3 +47,24 @@ def plot_gravity(Vxx, Vxy, Vxz, Vyy, Vyz, Vzz, P, Vz, title=None):
     plt.show()
     plt.ioff()
     return
+
+
+def plot_hollow_sphere(a, b, r, g):
+    rmax = 2*b
+    c = g.max()
+    fig, ax = plt.subplots()
+
+    ax.plot(r, g, 'black', linewidth=0.85)
+    ax.annotate(s='a', xy=(a, 0))
+    ax.annotate(s='b', xy=(b, 0))
+    ax.annotate(s='I', xy=(a/2., c/3.))
+    ax.annotate(s='II', xy=((a+b)/2., c/3.,))
+    ax.annotate(s='III', xy=(b+(rmax-b)/2., c/3.))
+    ax.vlines(a, 0, c/2., 'r', linewidth=0.75,
+              linestyle='--')
+    ax.vlines(b, 0, c/2., 'r', linewidth=0.75,
+              linestyle='--')
+
+    plt.show()
+
+    return
