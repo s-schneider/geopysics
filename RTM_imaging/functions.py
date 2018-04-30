@@ -205,7 +205,8 @@ def ricker(f=None, n=None, dt=None, t0=None, t1=None):
     return rw, t
 
 
-def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
+def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True,
+                   shots=1):
     f = 60.
     nz, nx = Vp.shape[:]
     x = np.arange(1, nx+1) * dx
@@ -214,10 +215,10 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
     data = np.zeros((nt, nx))
 
     if animation:
+        plt.ion()
         fig = plt.figure()
         ax = range(4)
         cbar = range(3)
-        clim = [-1000, 1000]
 
         ax[0] = plt.subplot2grid((5, 5), (0, 0), colspan=2, rowspan=2)
         ax[1] = plt.subplot2grid((5, 5), (0, 3), colspan=2, rowspan=2)
@@ -226,8 +227,7 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
 
         # subplot(2,2,1)
         iVp = ax[0].imshow(Vp, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
-        ax[0].plot(x[0], z[0], 'x')
-        ax[0].plot(x[0], z[0], '^', color='white')
+        hshot = ax[0].plot(x[0], z[0], '*', color='white')[0]
         ax[0].set_title('c(x)')
         ax[0].set_xlabel('Distance (m)')
         ax[0].set_xlim(dx, nx*dx)
@@ -235,8 +235,7 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
         ax[0].set_ylim(nz*dz, 0)
         cbar[0] = fig.colorbar(iVp, ax=ax[0])
 
-        nxi = 1
-        for ixs in range(21, 22+nxi):  # shot loop
+        for ixs in range(21, 21+shots):  # shot loop
             # initial wavefield
             rw, t = ricker(f, nz+40, dt, dt*ixs, 0)
             rw = rw[0:nz+20]
@@ -254,53 +253,60 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
             msg = "Elapsed time is %s seconds." % (toc-tic)
             print(msg)
 
-            data = data[21:-20, :].transpose()
-            data0 = data0[21:-20, :].transpose()
-            dataS = data - data0
+            data = data.transpose()  # [21:-20, :]
+            data0 = data0.transpose()  # [21:-20, :]
 
             #  save(['Marmousi/snapshot0',num2str(ixs-20),'.mat'],'snapshot0');
             #  save(['Marmousi/shotfdm',num2str(ixs-20),'.mat'],'data')
             #  save(['Marmousi/shotfdmS',num2str(ixs-20),'.mat'],'dataS')
 
             # plot initial wavefield
-            """
-            set(hshot,'XData',x(ixs-20),'YData',z(1));
-            subplot(2,2,2)
-            imagesc(x,z,rw(1:end-20,21:end-20))
-            xlabel('Distance (m)'); ylabel('Depth (m)');
-            title(['Shot ',num2str(ixs-20),' at ',num2str(x(ixs-20)),' m']);
-            colormap(seismic(1024))
+            hshot.set_xdata(x[ixs-20])
+            ax[1].imshow(rw[:-20, 21:-20], extent=(dx, nx*dx, nz*dz, dz),
+                         cmap='seismic')
+            ax[1].set_xlabel('Distance (m)')
+            ax[1].set_ylabel('Depth (m)')
+            ax[1].set_title('Shot %s at %s m' % (ixs-20, x[ixs-20]))
+            plt.pause(0.01)
+#            colormap(seismic(1024))
 
-            if ismember(ixs-20,[1 nx/2 nx])
-                start = 1;
-            else
-                start = nt;
-            end
+            if ixs-20 in [1, nx/2, nx]:
+                start = 0
+            else:
+                start = nt
 
-            for i = start:10:nt
-                % plot shot record evolution
-                ds = zeros(nt,nx);
-                ds(1:i,:) = data(1:i,:);
-                subplot(2,2,3)
-                imagesc(x,t,ds)
-                xlabel('Distance (m)'), ylabel('Time (s)')
-                title('Shot Record')
-                %caxis([-0.5 0.5]) % this for layered model
-                caxis([-5 5]) % this for Marmousi model
+            for i in np.arange(start, nt, 10):
+                # plot shot record
+                ds = np.zeros((nt, nx))
+                ds[0:i, :] = data[0:i, :]
+                if i == start:
+                    im1 = ax[2].imshow(ds, extent=(dx, nx*dx, nz*dz, dz))
+                    im2 = ax[3].imshow(snapshot[0:-20, 21:-19, i],
+                                       extent=(dx, nx*dx, nz*dz, dz))
+                    # xlabel('Distance (m)'), ylabel('Time (s)')
+                    # title('Shot Record')
+                    # %caxis([-0.5 0.5]) % this for layered model
+                    # caxis([-5 5]) % this for Marmousi model
 
-                % plot wave propagation
-                subplot(2,2,4)
-                imagesc(x,z,snapshot(1:end-20,21:end-20,i))
-                xlabel('Distance (m)'), ylabel('Depth (m)')
-                title(['Wave Propagation t = ',num2str(t(i),'%10.3f')])
-                %caxis([-5 5]) % this for layered model
-                caxis([-50 50]) % this for Marmousi model
+                    # % plot wave propagation
+                    # subplot(2,2,4)
 
+                    # xlabel('Distance (m)'), ylabel('Depth (m)')
+                    # title(['Wave Propagation t = ',num2str(t(i),'%10.3f')])
+                    # %caxis([-5 5]) % this for layered model
+                    # caxis([-50 50]) % this for Marmousi model
+                else:
+                    # im1 = ax[2].imshow(ds, extent=(dx, nx*dx, nz*dz, dz))
+                    # im2 = ax[3].imshow(snapshot[0:-20, 21:-19, i],
+                    #                    extent=(dx, nx*dx, nz*dz, dz))
+                    im1.set_data(ds)
+                    im2.set_data(snapshot[0:-20, 21:-19, i])
+                    im1.autoscale()
+                    im2.autoscale()
+                    fig.canvas.draw()
 
-                drawnow;
-            end
-            end %shot loop
-            """
+                plt.pause(1E-16)
+
     return
 
 
@@ -438,6 +444,6 @@ def fm2d(v, model, dz, dx, nt, dt):
 
         snapshot[:, :, it] = fdm[:, :, 1]
 
-    data = data[21:nx-20, :]
+    data = data[21:nx-19, :]
 
     return data, snapshot
