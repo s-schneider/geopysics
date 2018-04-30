@@ -1,6 +1,125 @@
+from RTM_imaging.data import Marmousi, migration
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+
+
+# Data source
+
+migration_path = migration.__path__[0]
+marmousi_path = Marmousi.__path__[0]
+
+
+def load_model(type):
+    if type == 'marmousi':
+        """
+        EXAMPLE 2 : Marmousi model
+        """
+        VelocityModel = np.genfromtxt('%s/marmhard.dat' % marmousi_path)
+        VelocityModel = VelocityModel.reshape([122, 384])
+
+        VelocityModel0 = np.genfromtxt('%s/marmsmooth.dat' % marmousi_path)
+        VelocityModel0 = VelocityModel.reshape([122, 384])
+        # Write new variable
+        velocityModel = VelocityModel[21:121, 241:341]
+        velocityModel0 = VelocityModel0[21:121, 241:341]
+
+    else:
+        """
+        EXAMPLE 1 : Layered model
+        """
+        velocityModel0 = 3000. * np.ones([100, 100])
+        velocityModel = velocityModel0.copy()
+        velocityModel[50:52] = 4000
+
+        return velocityModel, velocityModel0
+
+
+def plot_velocity_model(Vp, Vp0, dx=24, dz=24):
+
+    nz, nx = Vp.shape[:]
+    dV = Vp - Vp0
+
+    x = np.arange(1, nx+1) * dx
+    z = np.arange(1, nz+1) * dz
+
+    fig = plt.figure()
+    ax = range(3)
+    cbar = range(3)
+    clim = [-1000, 1000]
+
+    ax[0] = plt.subplot2grid((18, 18), (0, 0), colspan=6, rowspan=6)
+    iVp = ax[0].imshow(Vp, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
+    ax[0].plot(x[0], z[0], '^', color='white')  # , mew=10, ms=15)
+    ax[0].set_title('c(x)')
+    ax[0].set_xlabel('Distance (m)')
+    ax[0].set_xlim(dx, nx*dx)
+    ax[0].set_ylim(nz*dz, 0)
+    ax[0].set_ylabel('Depth (m)')
+    cbar[0] = fig.colorbar(iVp)
+
+    ax[1] = plt.subplot2grid((18, 18), (0, 12), colspan=6, rowspan=6)
+    iVp0 = ax[1].imshow(Vp0, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
+    ax[1].set_title(r'$c_{0}(x)$')
+    ax[1].set_xlabel('Distance (m)')
+    ax[1].set_ylabel('Depth (m)')
+    cbar[1] = fig.colorbar(iVp0)
+
+    ax[2] = plt.subplot2grid((18, 18), (10, 0), colspan=6, rowspan=6)
+    idV = ax[2].imshow(dV, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic',
+                       clim=clim)
+    ax[2].set_title(r'${\delta}c(x)$')
+    ax[2].set_xlabel('Distance (m)')
+    ax[2].set_ylabel('Depth (m)')
+    cbar[2] = fig.colorbar(idV)
+
+    return
+
+
+def set_FD_params(Vp, V0, dx=24, dz=24):
+    Vp = Vp.transpose()
+    V0 = V0.transpose()
+
+    nz, nx = Vp.shape[:]
+
+    Mdz = np.ones(Vp.shape) * dz
+    dt = 0.2 * (Mdz/Vp/np.sqrt(2)).min()
+
+    vmin = Vp.min()
+
+    # determine time samples nt from wave travelime to depth and back to
+    # surface
+    nt = int(np.round(np.sqrt((dx*nx)**2 + (dz*nx)**2) * (2/vmin/dt) + 1))
+    t = np.arange(0, nt)*dt
+
+    # add region around model for applying absorbing boundary conditions (20
+    # nodes wide)
+    Vm = np.vstack((
+                   np.matlib.repmat(Vp[0], 20, 1),
+                   Vp,
+                   np.matlib.repmat(Vp[-1], 20, 1)
+                   ))
+
+    Vm = np.hstack((
+                   Vm,
+                   np.matlib.repmat(Vm[:, -1], 20, 1).transpose()
+                   ))
+
+    Vm0 = np.vstack((
+                   np.matlib.repmat(V0[0], 20, 1),
+                   V0,
+                   np.matlib.repmat(V0[-1], 20, 1)
+                   ))
+
+    Vm0 = np.hstack((
+                   Vm0,
+                   np.matlib.repmat(Vm0[:, -1], 20, 1).transpose()
+                   ))
+
+    Vm = Vm.transpose()
+    Vm0 = Vm0.transpose()
+
+    return Vm, Vm0, t, dt, nt
 
 
 def ricker(f=None, n=None, dt=None, t0=None, t1=None):
@@ -124,20 +243,20 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
 
             # generate shot records
             tic = time.time()
-            [data, snapshot] = fm2d(Vm, rw, nz, dz, nx, dx, nt, dt)
+            [data, snapshot] = fm2d(Vm, rw, dz, dx, nt, dt)
             toc = time.time()
             msg = "Elapsed time is %s seconds." % (toc-tic)
             print(msg)
 
             tic = time.time()
-            [data0, snapshot0] = fm2d(Vm0, rw, nz, dz, nx, dx, nt, dt)
+            [data0, snapshot0] = fm2d(Vm0, rw, dz, dx, nt, dt)
             toc = time.time()
             msg = "Elapsed time is %s seconds." % (toc-tic)
             print(msg)
 
-            # data = data(21:end-20,:)'
-            # data0 = data0(21:end-20,:)'
-            # dataS = data - data0
+            data = data[21:-20, :].transpose()
+            data0 = data0[21:-20, :].transpose()
+            dataS = data - data0
 
             #  save(['Marmousi/snapshot0',num2str(ixs-20),'.mat'],'snapshot0');
             #  save(['Marmousi/shotfdm',num2str(ixs-20),'.mat'],'data')
@@ -185,8 +304,10 @@ def generate_shots(Vp, Vm, Vm0, dt, nt, dx=24, dz=24, animation=True):
     return
 
 
-def fm2d(v, model, nz, dz, nx, dx, nt, dt):
+def fm2d(v, model, dz, dx, nt, dt):
     """
+    DEBUGGING IN PROGRESS!
+
     model(nz,nx)      model vector
     v(nz,nx)          velocity model
     nx                number of horizontal samples
@@ -197,6 +318,7 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
     dt                time difference per sample
     """
     # add grid points for boundary condition
+    #  np.matlib.repmat(Vm0[:, -1], 20, 1)
     # model = [repmat(model(:,1),1,20), model, repmat(model(:,end),1,20)];
     # model(end+20,:) = model(end,:);
 
@@ -209,12 +331,12 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
     fdm = np.zeros((nz, nx, 3))
 
     # Boundary Absorbing Model
-    iz = np.arange(1, 21)
+    iz = np.arange(20)
     boundary = (np.exp(-((0.005 * (20-iz))**2)))**10.
     boundary = boundary.transpose()
 
     # Forward-Time Modeling
-    fdm = np.array((model, model))
+    fdm[:, :, 1] = model
     data[:, 0] = model[0, :]
 
     # finite difference coefficients
@@ -222,44 +344,58 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
     b = 2-4*a
 
     # common indicies
-    iz = np.arange(2, nz)        # interior z
-    ix = np.arange(2, nx)        # interior x
-    izb = np.arange(1, nz-19)    # boundary z
+    izs = 1                      # interior z
+    ize = nz-1
+    ixs = 1                    # interior x
+    ixe = nx-1
+
+    izb = np.arange(0, nz-20)      # boundary z
 
     snapshot = np.zeros((nz, nx, nt))
 
     for it in np.arange(2, nt):
         # finite differencing on interior
-        fdm[iz, ix, 2] = (
-                          b[iz, ix] * fdm[iz, ix, 1] - fdm[iz, ix, 0] +
-                          a[iz, ix] * (fdm[iz, ix+1, 1] + fdm[iz, ix-1, 1] +
-                                       fdm[iz+1, ix, 1] + fdm[iz-1, ix, 1])
+        fdm[izs:ize, ixs:ixe, 2] = (
+                          b[izs:ize, ixs:ixe] * fdm[izs:ize, ixs:ixe, 1] -
+                          fdm[izs:ize, ixs:ixe, 0] +
+                          a[izs:ize, ixs:ixe] * (fdm[izs:ize, ixs+1:ixe+1, 1] +
+                                                 fdm[izs:ize, ixs-1:ixe-1, 1] +
+                                                 fdm[izs+1:ize+1, ixs:ixe, 1] +
+                                                 fdm[izs-1:ize-1, ixs:ixe, 1])
                           )
 
         # finite differencing at ix = 1 and ix = nx (surface, bottom)
-        fdm[iz, 0, 2] = (
-                         b[iz, 0] * fdm[iz, 0, 1] - fdm[iz, 0, 0] +
-                         a[iz, 0] * (fdm[iz, 1, 1] + fdm[iz+1, 0, 1] +
-                                     fdm[iz-1, 0, 1])
+        fdm[izs:ize, 0, 2] = (
+                         b[izs:ize, 0] * fdm[izs:ize, 0, 1] -
+                         fdm[izs:ize, 0, 0] +
+                         a[izs:ize, 0] * (fdm[izs:ize, 1, 1] +
+                                          fdm[izs+1:ize+1, 0, 1] +
+                                          fdm[izs-1:ize-1, 0, 1])
                         )
 
-        fdm[iz, nx, 2] = (
-                          b[iz, nx] * fdm[iz, nx, 1] - fdm[iz, nx, 0] +
-                          a[iz, nx] * (fdm[iz, nx-1, 1] + fdm[iz+1, nx, 1] +
-                                       fdm[iz-1, nx, 1])
+        fdm[izs:ize, nx-1, 2] = (
+                          b[izs:ize, nx-1] * fdm[izs:ize, nx-1, 1] -
+                          fdm[izs:ize, nx-1, 0] +
+                          a[izs:ize, nx-1] * (fdm[izs:ize, nx-2, 1] +
+                                              fdm[izs+1:ize+1, nx-1, 1] +
+                                              fdm[izs-1:ize-1, nx-1, 1])
                          )
 
         # finite differencing at iz = 1 and iz = nz (z boundaries)
-        fdm[0, ix, 2] = (
-                         b[0, ix] * fdm[0, ix, 1] - fdm[0, ix, 0] +
-                         a[0, ix] * (fdm[1, ix, 1] + fdm[0, ix+1, 1] +
-                                     fdm[0, ix-1, 1])
+        fdm[0, ixs:ixe, 2] = (
+                         b[0, ixs:ixe] * fdm[0, ixs:ixe, 1] -
+                         fdm[0, ixs:ixe, 0] +
+                         a[0, ixs:ixe] * (fdm[1, ixs:ixe, 1] +
+                                          fdm[0, ixs+1:ixe+1, 1] +
+                                          fdm[0, ixs-1:ixe-1, 1])
                         )
 
-        fdm[nz, ix, 2] = (
-                          b[nz, ix] * fdm[nz, ix, 1] - fdm[nz, ix, 0] +
-                          a[nz, ix] * (fdm[nz-1, ix, 1] + fdm[nz, ix+1, 1] +
-                                       fdm[nz, ix-1, 1])
+        fdm[nz-1, ixs:ixe, 2] = (
+                          b[nz-1, ixs:ixe] * fdm[nz-1, ixs:ixe, 1] -
+                          fdm[nz-1, ixs:ixe, 0] +
+                          a[nz-1, ixs:ixe] * (fdm[nz-2, ixs:ixe, 1] +
+                                              fdm[nz-1, ixs+1:ixe+1, 1] +
+                                              fdm[nz-1, ixs-1:ixe-1, 1])
                          )
 
         # finite differencing at four corners (1,1), (nz,1), (1,nx), (nz,nx)
@@ -267,17 +403,19 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
                         b[0, 0] * fdm[0, 0, 1] - fdm[0, 0, 0] +
                         a[0, 0] * (fdm[1, 0, 1] + fdm[0, 1, 1])
                        )
-        fdm[nz, 0, 2] = (
-                         b[nz, 0] * fdm[nz, 0, 1] - fdm[nz, 0, 0] +
-                         a[nz, 1] * (fdm[nz, 1, 1] + fdm[nz-1, 0, 1])
+        fdm[nz-1, 0, 2] = (
+                         b[nz-1, 0] * fdm[nz-1, 0, 1] - fdm[nz-1, 0, 0] +
+                         a[nz-1, 1] * (fdm[nz-1, 1, 1] + fdm[nz-2, 0, 1])
                         )
-        fdm[0, nx, 2] = (
-                         b[0, nx] * fdm[0, nx, 1] - fdm[0, nx, 0] +
-                         a[0, nx] * (fdm[0, nx-1, 1] + fdm[2, nx, 1])
+        fdm[0, nx-1, 2] = (
+                         b[0, nx-1] * fdm[0, nx-1, 1] - fdm[0, nx-1, 0] +
+                         a[0, nx-1] * (fdm[0, nx-2, 1] + fdm[2, nx-1, 1])
                         )
-        fdm[nz, nx, 2] = (
-                          b[nz, nx] * fdm[nz, nx, 0] - fdm[nz, nx, 0] +
-                          a[nz, nx] * (fdm[nz-1, nx, 1] + fdm[nz, nx-1, 1])
+        fdm[nz-1, nx-1, 2] = (
+                          b[nz-1, nx-1] * fdm[nz-1, nx-1, 0] -
+                          fdm[nz-1, nx-1, 0] +
+                          a[nz-1, nx-1] * (fdm[nz-2, nx-1, 1] +
+                                           fdm[nz-1, nx-2, 1])
                          )
 
         # update fdm for next time iteration
@@ -285,15 +423,15 @@ def fm2d(v, model, nz, dz, nx, dx, nt, dt):
         fdm[:, :, 1] = fdm[:, :, 2]
 
         # apply absorbing boundary conditions to 3 sides (not surface)
-        for ixb in range(1, 21):
+        for ixb in range(20):
             fdm[izb, ixb, 0] = boundary[ixb] * fdm[izb, ixb, 0]
             fdm[izb, ixb, 1] = boundary[ixb] * fdm[izb, ixb, 1]
             ixb2 = nx-20+ixb
-            fdm[izb, ixb2, 0] = boundary[nx-ixb2+1] * fdm[izb, ixb2, 0]
-            fdm[izb, ixb2, 1] = boundary[nx-ixb2+1] * fdm[izb, ixb2, 1]
+            fdm[izb, ixb2, 0] = boundary[nx-ixb2-1] * fdm[izb, ixb2, 0]
+            fdm[izb, ixb2, 1] = boundary[nx-ixb2-1] * fdm[izb, ixb2, 1]
             izb2 = nz-20+ixb
-            fdm[izb2, :, 0] = boundary[nz-izb2+1] * fdm[izb2, :, 0]
-            fdm[izb2, :, 1] = boundary[nz-izb2+1] * fdm[izb2, :, 1]
+            fdm[izb2, :, 0] = boundary[nz-izb2-1] * fdm[izb2, :, 0]
+            fdm[izb2, :, 1] = boundary[nz-izb2-1] * fdm[izb2, :, 1]
 
         # update data
         data[:, it] = fdm[0, :, 1]
