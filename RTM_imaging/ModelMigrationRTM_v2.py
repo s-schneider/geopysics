@@ -69,9 +69,12 @@ travelTime = generate_traveltimes(Vp0)
 
 """
 PART 6 :
-%%%%
-%% Process Shots - Kirchhoff Migration
+Process Shots - Kirchhoff Migration
+"""
 
+#stack, = kirchof_migration()
+
+"""
 %vidObj = VideoWriter('videos\FaultModelKirchhoff.avi');
 %open(vidObj);
 %load('travelTime.mat');
