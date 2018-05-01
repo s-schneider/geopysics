@@ -178,7 +178,8 @@ def plot_travel_times(Vp0, shot_x, ixs, dx, dz, travelTime=None, init=False,
         ax = range(2)
 
         ax[0] = plt.subplot(gs[0, 0])
-        ax[0].imshow(Vp0, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
+        ax[0].imshow(Vp0, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic',
+                     vmin=-1000, vmax=1000)
         ax[0].set_xlabel('Distance (m)')
         ax[0].set_ylabel('Depth (m)')
         ax[0].set_title(r'$c_0(x)$')
@@ -192,12 +193,13 @@ def plot_travel_times(Vp0, shot_x, ixs, dx, dz, travelTime=None, init=False,
         if ixs == 0:
             im_tT = ax[1].imshow(travelTime, extent=(dx, nx*dx, nz*dz, dz),
                                  cmap='seismic', vmin=0, vmax=1)
-            fig.colorbar(im_tT, ax=ax[1])
+#            fig.colorbar(im_tT, ax=ax[1])
             ax[1].set_title('Traveltime for shot %i' % ixs)
         else:
             ax[1].set_title('Traveltime for shot %i' % ixs)
             im_tT.set_data(travelTime)
             im_tT.autoscale()
+            im_tT.set_clim(0, 1)
             fig.canvas.draw()
             hshot.set_xdata(shot_x)
     plt.pause(0.0005)

@@ -1,7 +1,7 @@
 from RTM_imaging.functions import (generate_shots, load_model, set_FD_params,
                                    generate_traveltimes)
 from RTM_imaging.plotting import (plot_velocity_model,
-                                  plot_scattered_wave_data, plot_travel_times)
+                                  plot_scattered_wave_data)
 
 
 """
@@ -64,15 +64,11 @@ PART 5 :
 Traveltime by 2D ray-tracing
 Generate the traveltime field for all z = 0 locations
 """
-#%vidObj = VideoWriter('FaultModelTravelTime.avi');
-#%open(vidObj);
-
 travelTime = generate_traveltimes(Vp0)
 
+
 """
-%%
-%%%%
-%%%% PART 6 :
+PART 6 :
 %%%%
 %% Process Shots - Kirchhoff Migration
 

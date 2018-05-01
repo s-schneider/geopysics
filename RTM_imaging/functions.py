@@ -3,6 +3,7 @@ from RTM_imaging.plotting import (_init_shot_plot, plot_initial_wavefield,
                                   plot_wavefield_animation,
                                   plot_travel_times)
 import numpy as np
+import scipy.io
 import matplotlib.pyplot as plt
 import time
 
@@ -11,6 +12,7 @@ import time
 
 migration_path = migration.__path__[0]
 marmousi_path = Marmousi.__path__[0]
+
 
 
 def load_model(type):
@@ -182,7 +184,6 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
         # initial wavefield
         rw = ricker(f, nz+40, dt, dt*ixs, 0)
         rw = rw[0:nz+20]
-   
 
         # generate shot records
         tic = time.time()
@@ -211,17 +212,16 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
             start = 0
         else:
             start = nt
-        
-        if animation:  
+
+        if animation:
             plot_wavefield_animation(ax, fig, start, nt, 10,
                                      nt, nx, nz, dx, dz,
                                      data, snapshot, t)
-        else:  
+        else:
             plot_wavefield_animation(ax, fig, nt-1, nt, 1,
                                      nt, nx, nz, dx, dz,
                                      data, snapshot, t)
             plt.pause(0.01)
-
 
     return data, data0
 
@@ -366,22 +366,95 @@ def fm2d(v, model, dz, dx, nt, dt):
 
 
 def generate_traveltimes(Vp0, dx=24, dz=24, plot=True):
-    
+
     nz, nx = Vp0.shape[:]
     x = np.arange(1, nx+1) * dx
-    
-    travelTime = np.zeros((nz,nx,nx))
-    
+
+    travelTime = np.zeros((nz, nx, nx))
+
     if plot:
         fig, ax, hshot, im_tT = plot_travel_times(Vp0, None, None, dx, dz,
                                                   init=True)
 
     for ixs in range(nx):
-        travelTime[:,:,ixs] = np.zeros((nz,nx))  # ray2d(Vp0,[1 ixs],dx)
+        travelTime[:, :, ixs] = ray2d(Vp0, [0, ixs], dz)
         if plot:
             fig, ax, hshot, im_tT = plot_travel_times(Vp0, x[ixs], ixs, dx, dz,
-                                                      travelTime[:,:,ixs],
+                                                      travelTime[:, :, ixs],
                                                       ax=ax, fig=fig,
                                                       im_tT=im_tT,
                                                       hshot=hshot)
     return travelTime
+
+
+def ray2d(V, Shot, dx):
+    """
+     2D ray-tracing
+       RAY2D
+    """
+    # load dA
+    dA = scipy.io.loadmat('%s/dA.mat' % migration_path)['dA']
+    dA= dA.reshape(169, 144)
+    # Constants
+    v0 = 10000.
+    sz = 6
+    sx = 6
+    sz2 = 2*sz + 1
+    sx2 = 2*sx + 1
+    zs = Shot[0] + sz
+    xs = Shot[1] + sx
+
+    # Derived values
+    V = 1./V           # convert to slowness
+    mxV = V.max()
+    nz, nx = V.shape
+
+    # Preallocate
+    T = np.ones((nz+sz2, nx+sx2)) * v0
+    M = T.copy()
+    S = np.ones((nz+sz2-1, nx+sx2-1))
+
+    #
+    M[sz:nz+sz+1, sx:nx+sx+1] = 0
+
+    S[sz:nz+sz, sx:nx+sx] = V
+    S[nz+sz, sx:nx+sx] = 2*S[nz+sz-1, sx:nx+sx] - S[nz+sz-2, sx:nx+sx]
+    S[sz:nz+sz, nx+sx] = 2*S[sz:nz+sz, nx+sx-1] - S[sz:nz+sz, nx+sx-1]
+    S[nz+sz, nx+sx] = 2*S[nz+sz, nx+sx] - S[nz+sz-1, nx+sx-1]
+
+    T[zs, xs] = 0
+    M[zs, xs] = v0
+
+    AS = S[-sz+zs:sz+zs, -sx+xs:sx+xs]
+    TT = T[-sz+zs:sz+zs+1, -sx+xs:sx+xs+1]
+
+    dAAS = np.dot(dA, AS.flatten()) + T[zs, xs]
+    dAAS = dAAS.reshape(sz2, sx2)
+    T[-sz+zs:sz+zs+1, -sx+xs:sx+xs+1] = np.minimum(dAAS, TT)
+
+    mxT = T[zs-1:zs+2, xs-1:xs+2].max()
+
+    while True:
+        indx = T+M <= mxT+mxV
+
+        if not indx.any():
+            indx = M == 0
+
+        idz, idx = np.where(indx is True)
+        M[indx] = v0
+
+        for z, x in zip(idz, idx):
+            mxT = np.maximum(mxT, T[x, z])
+            AS = S[-sz+z:sz+z, -sx+x:sx+x]
+            TT = T[-sz+z:sz+z+1, -sx+x:sx+x+1]
+            dAAS = np.dot(dA, AS.flatten()) + T[z, x]
+            dAAS = dAAS.reshape(sz2, sx2)
+            T[-sz+z:sz+z+1, -sx+x:sx+x+1] = np.minimum(dAAS, TT)
+
+        if np.all(M[sz:nz+sz, sx:nx+sx]):
+            break
+
+        mxT = T[idz, idx].max()
+
+    T = T[sz:nz+sz, sx:nx+sx]*dx
+    return T
