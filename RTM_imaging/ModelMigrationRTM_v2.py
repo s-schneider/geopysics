@@ -43,7 +43,7 @@ PART 3 :
 
 Generate shots and save to file
 """
-generate_shots(Vp, Vm, Vm0, dt, nt, shots=10)
+generate_shots(Vp, Vm, Vm0, t, dt, nt, shots=1, animation=False)
 
 
 """
