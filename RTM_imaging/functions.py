@@ -1,6 +1,7 @@
 from RTM_imaging.data import Marmousi, migration
 from RTM_imaging.plotting import (_init_shot_plot, plot_initial_wavefield,
-                                  plot_wavefield_animation)
+                                  plot_wavefield_animation,
+                                  plot_travel_times)
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -35,47 +36,6 @@ def load_model(type):
         velocityModel[50:52] = 4000
 
         return velocityModel, velocityModel0
-
-
-def plot_velocity_model(Vp, Vp0, dx=24, dz=24):
-
-    nz, nx = Vp.shape[:]
-    dV = Vp - Vp0
-
-    x = np.arange(1, nx+1) * dx
-    z = np.arange(1, nz+1) * dz
-
-    fig = plt.figure()
-    ax = range(3)
-    cbar = range(3)
-    clim = [-1000, 1000]
-
-    ax[0] = plt.subplot2grid((18, 18), (0, 0), colspan=6, rowspan=6)
-    iVp = ax[0].imshow(Vp, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
-    ax[0].plot(x[0], z[0], '^', color='white')  # , mew=10, ms=15)
-    ax[0].set_title('c(x)')
-    ax[0].set_xlabel('Distance (m)')
-    ax[0].set_xlim(dx, nx*dx)
-    ax[0].set_ylim(nz*dz, 0)
-    ax[0].set_ylabel('Depth (m)')
-    cbar[0] = fig.colorbar(iVp)
-
-    ax[1] = plt.subplot2grid((18, 18), (0, 12), colspan=6, rowspan=6)
-    iVp0 = ax[1].imshow(Vp0, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic')
-    ax[1].set_title(r'$c_{0}(x)$')
-    ax[1].set_xlabel('Distance (m)')
-    ax[1].set_ylabel('Depth (m)')
-    cbar[1] = fig.colorbar(iVp0)
-
-    ax[2] = plt.subplot2grid((18, 18), (10, 0), colspan=6, rowspan=6)
-    idV = ax[2].imshow(dV, extent=(dx, nx*dx, nz*dz, dz), cmap='seismic',
-                       clim=clim)
-    ax[2].set_title(r'${\delta}c(x)$')
-    ax[2].set_xlabel('Distance (m)')
-    ax[2].set_ylabel('Depth (m)')
-    cbar[2] = fig.colorbar(idV)
-
-    return
 
 
 def set_FD_params(Vp, V0, dx=24, dz=24):
@@ -263,7 +223,7 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
             plt.pause(0.01)
 
 
-    return
+    return data, data0
 
 
 def fm2d(v, model, dz, dx, nt, dt):
@@ -403,3 +363,25 @@ def fm2d(v, model, dz, dx, nt, dt):
     data = data[21:nx-19, :]
 
     return data, snapshot
+
+
+def generate_traveltimes(Vp0, dx=24, dz=24, plot=True):
+    
+    nz, nx = Vp0.shape[:]
+    x = np.arange(1, nx+1) * dx
+    
+    travelTime = np.zeros((nz,nx,nx))
+    
+    if plot:
+        fig, ax, hshot, im_tT = plot_travel_times(Vp0, None, None, dx, dz,
+                                                  init=True)
+
+    for ixs in range(nx):
+        travelTime[:,:,ixs] = np.zeros((nz,nx))  # ray2d(Vp0,[1 ixs],dx)
+        if plot:
+            fig, ax, hshot, im_tT = plot_travel_times(Vp0, x[ixs], ixs, dx, dz,
+                                                      travelTime[:,:,ixs],
+                                                      ax=ax, fig=fig,
+                                                      im_tT=im_tT,
+                                                      hshot=hshot)
+    return travelTime

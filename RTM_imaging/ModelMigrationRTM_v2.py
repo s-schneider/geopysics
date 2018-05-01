@@ -1,5 +1,7 @@
-from RTM_imaging.functions import (generate_shots, load_model,
-                                   plot_velocity_model, set_FD_params)
+from RTM_imaging.functions import (generate_shots, load_model, set_FD_params,
+                                   generate_traveltimes)
+from RTM_imaging.plotting import (plot_velocity_model,
+                                  plot_scattered_wave_data, plot_travel_times)
 
 
 """
@@ -15,7 +17,9 @@ Read in velocity model data and plot it
 """
 # load velocityModel
 
-Vp, Vp0 = load_model('migration')
+model_name = 'migration'
+
+Vp, Vp0 = load_model(model_name)
 
 dx = 24
 dz = 24
@@ -43,91 +47,29 @@ PART 3 :
 
 Generate shots and save to file
 """
-generate_shots(Vp, Vm, Vm0, t, dt, nt, shots=1, animation=False)
+data, data0 = generate_shots(Vp, Vm, Vm0, t, dt, nt, shots=1, animation=False)
 
 
 """
-%%
-%%%%
-%%%% PART 4 :
-%%%%
-%% Plotting scattered-wave data
+PART 4 :
 
-figure
-subplot(2,2,1)
-imagesc(x,z,dV)
-xlabel('Distance (m)'); ylabel('Depth (m)');
-title('\deltaV');
-caxis([-1000 1000])
-hold on
-hshot = plot(x(1),z(1),'w*');
-hold off
-
-subplot(2,2,2)
-imagesc(x,t,dataS)
-xlabel('Distance (m)'), ylabel('Time (s)')
-title('d_S = d - d_0')
-%caxis([-0.15 0.15])
-caxis([-0.5 0.5]) % this for layered model
-caxis([-1 1]) % this for marmousi
-
-subplot(2,2,3)
-imagesc(x,t,data)
-xlabel('Distance (m)'), ylabel('Time (s)')
-title('d')
-%caxis([-0.15 0.15])
-caxis([-0.5 0.5]) % this for layered model
-caxis([-1 1]) % this for marmousi
-
-subplot(2,2,4)
-imagesc(x,t,data0)
-xlabel('Distance (m)'), ylabel('Time (s)')
-title('d_0')
-%caxis([-0.15 0.15])
-caxis([-0.5 0.5]) % this for layered model
-caxis([-1 1]) % this for marmousi
-
-colormap(gray(1024))
-%colormap(seismic(1024))
-
-%%
-%%%%
-%%%% PART 5 :
-%%%%
-%% Traveltime by 2D ray-tracing
-% Generate the traveltime field for all z = 0 locations
-%vidObj = VideoWriter('FaultModelTravelTime.avi');
-%open(vidObj);
-travelTime = zeros(nz,nx,nx);
-
-figure
-subplot(2,2,1)
-imagesc(x,z,velocityModel0)
-xlabel('Distance (m)'); ylabel('Depth (m)');
-title('c_0(x)');
-hold on
-hshot = plot(x(1),z(1),'w*');
-hold off
-colormap(gray)
-colormap(seismic(1024))
+Plotting scattered-wave data
+"""
+plot_scattered_wave_data(Vp, Vp0, data, data0, t, model_name=model_name)
 
 
-subplot(2,2,2)
-for ixs = 1:nx
-    travelTime(:,:,ixs) = ray2d(Vp0,[1 ixs],dx);
-    imagesc(x,z,travelTime(:,:,ixs))
-    xlabel('Distance (m)'), ylabel('Depth (m)')
-    title(['Traveltime for shot ',num2str(ixs)])
-    caxis([0. 1.])
-    colorbar
-    set(hshot,'XData',x(ixs));
-    drawnow
-    %writeVideo(vidObj,getframe(gcf));
-end
-%close(vidObj)
-%save results for later re-use
-save('Marmousi/travelTime.mat', 'travelTime')
+"""
+PART 5 :
 
+Traveltime by 2D ray-tracing
+Generate the traveltime field for all z = 0 locations
+"""
+#%vidObj = VideoWriter('FaultModelTravelTime.avi');
+#%open(vidObj);
+
+travelTime = generate_traveltimes(Vp0)
+
+"""
 %%
 %%%%
 %%%% PART 6 :
