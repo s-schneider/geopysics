@@ -74,15 +74,120 @@ PART 6 :
 Process Shots - Kirchhoff Migration
 """
 dataS = data - data0
-kirchhof_migration(Vp, dV, dataS, shots, t, dt)
+Stacked = kirchhof_migration(Vp, dV, dataS, shots, t, dt)
 
 
 """
-%%
-%%%%
-%%%% PART 7 :
-%%%%
-%% Process Shots - Reverse Time Migration
+PART 7 :
+Process Shots - Reverse Time Migration
+"""
+
+Stacked = reverse_time_migration(Vp, Vp0, dataS, shots, t, dt, nt)
+
+
+def reverse_time_migration(Vp, Vp0, dataS, n_of_shots, t, dt, nt, tmax='all',
+                           plot=True, loadfile=True, travelTime=None,
+                           dx=24, dz=24):
+    """
+    tmax: 'all' or float between 0-1
+    """
+
+    if loadfile:
+        travelTime = load_file('travelTime.dat', (100, 100, 100))
+    else:
+        if travelTime is None:
+            raise IOError('No travelTime data given')
+
+    nz, nx = Vp.shape
+
+    for ixs in range(n_of_shots):
+        if loadfile:
+            shape = (2668, 100)
+            dataS = load_file('shotfdmS%s.dat' % str(ixs+1), shape)
+            shape = (120, 140, 2668)
+            snapshot0 = load_file('snapshot0%s.dat' % str(ixs+1), shape)
+
+        shot = np.zeros((Vp.shape[1], nt))
+        shot[21:-20, :] = dataS.transpose().copy()
+        ntmig = shot.shape[1]
+
+        print('Migrating shot %s/%s ' % (str(ixs+1), n_of_shots))
+        rtmsnapshot = rtmod2d(Vp0, shot, nz, dz, nx, dx, ntmig, dt)
+
+        M = np.zeros(snapshot0.shape[:2])
+        s2 = np.zeros(snapshot0.shape[:2])
+        if tmax == 'all':
+            t = t[-1]
+        for i in np.arange(nt, step=10):
+            if t[nt-i] < tmax:
+                M += snapshot0[:, :, nt-i] * rtmsnapshot[:, :, nt-i]
+                s2 += np.power(snapshot0[:, :, i], 2)
+
+        if plot:
+            Mdiff = np.diff(M[:-19, 21:-19], 2, 0)
+            ss0 = snapshot0(1:end-20,21:end-20,nt-i+1)
+            rmt = rtmsnapshot(1:end-20,21:end-20,nt-i+1)
+            if ixs == 0:
+                hshot, fig, ax = plot_rtmigration(dV, ss0, rtm,
+                                                  Mdiff, shot, 0, t, nt, dx,
+                                                  dz, init=True)
+            else:
+                hshot, fig, ax = plot_rtmigration(dV, ss0, rtm,
+                                                  Mdiff, shot, 0, t, nt, dx,
+                                                  dz, init=True)
+
+    return Stacked
+
+def plot_rtmigration(dV, S snapshot0, rtmsnapshot, Mdiff, shot, i, t, nt, 
+                     dx, dz, hshot=None, init=False,  fig=None, ax=None):
+
+    nz, nx = dV.shape
+    x = np.arange(1, nx+1) * dx
+    z = np.arange(1, nz+1) * dz
+
+    if fig is None:
+        fig = plt.figure()
+        gs = gridspec.GridSpec(5, 5)
+        ax = range(4)
+
+    ax[0] = plt.subplot(gs[0:2, 0:2])
+    ax[0].imshow(dV, extent=(dx, nx*dx, nz*dz, dz), cmap='gray',
+                 vmin=-1000, vmax=1000)
+    ax[0].set_xlabel('Distance (m)')
+    ax[0].set_ylabel('Depth (m)')
+    ax[0].set_title(r'$\delta c(x)$')
+    if init:
+        hshot = ax[0].plot(x[0], z[0], '*', color='white')[0]
+    else:
+        hshot.set_xdata(x[i])
+
+    ax[1] = plt.subplot(gs[0:2, 3:5])
+    im1 = ax[1].imshow(snapshot0, extent=(dx, nx*dx, nz*dz, dz),
+                       aspect='auto', cmap='gray', vmin=-20, vmax=20)
+    ax[1].set_xlabel('Distance (m)')
+    ax[1].set_ylabel('Depth (m)')
+    ax[1].set_title(r'Forward Time Wave Propagation t = %.3f' % t(nt-i+1))
+    fig.colorbar(im1, ax=ax[1])
+
+    ax[2] = plt.subplot(gs[3:5, 0:2])
+    im2 = ax[2].imshow(rtmsnapshot, extent=(dx, nx*dx, nz*dz, dz),
+                       aspect='auto', cmap='gray', vmin=-20, vmax=20)
+    ax[2].set_xlabel('Distance (m)')
+    ax[2].set_ylabel('Depth (m)')
+    ax[2].set_title(r'Reverse Time Wave Propagation')
+    fig.colorbar(im2, ax=ax[2])
+
+    ax[3] = plt.subplot(gs[3:5, 3:5])
+    im3 = ax[3].imshow(Mdiff, extent=(dx, nx*dx, nz*dz, dz), aspect='auto',
+                       cmap='gray', vmin=-30, vmax=30)
+    ax[3].set_xlabel('Distance (m)')
+    ax[3].set_ylabel('Depth (m)')
+    ax[3].set_title(r'Current Migrated Shot %s' % i)
+    fig.colorbar(im3, ax=ax[3])
+
+    return hshot, fig, ax
+
+"""
 
 %vidObj = VideoWriter('videos\FaultModelRTM.avi');
 %open(vidObj);

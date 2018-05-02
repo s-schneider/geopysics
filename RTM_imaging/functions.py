@@ -1,7 +1,8 @@
 from RTM_imaging.data import Marmousi, migration
 from RTM_imaging.plotting import (_init_shot_plot, plot_initial_wavefield,
                                   plot_wavefield_animation,
-                                  plot_travel_times, plot_migration)
+                                  plot_travel_times, plot_migration,
+                                  plot_rtmigration)
 import numpy as np
 import scipy.io
 import matplotlib.pyplot as plt
@@ -202,9 +203,9 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
         data0 = data0.transpose()  # [21:-20, :]
 
         if save:
-            save_file(snapshot0, "snapshot0%s.dat" % ixs-20)
-            save_file(data, "shotfdm%s.dat" % ixs-20)
-            save_file(data-data0, "shotfdmS%s.dat" % ixs-20)
+            save_file(snapshot0, "snapshot0%s.dat" % str(ixs-20))
+            save_file(data, "shotfdm%s.dat" % str(ixs-20))
+            save_file(data-data0, "shotfdmS%s.dat" % str(ixs-20))
 
         # plot initial wavefield
         ax = plot_initial_wavefield(hshot, ax, dx, dz, nx, nz, ixs-20,
@@ -226,6 +227,7 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
                                      nt, nx, nz, dx, dz,
                                      data, snapshot, t)
             plt.pause(0.01)
+        update_progress(ixs/float(20+shots))
 
     return data, data0
 
@@ -536,7 +538,7 @@ def load_file(filename, shape):
     return x
 
 
-def kirchhof_migration(Vp, dV, dataS, n_of_shots, t, dt, plot=False,
+def kirchhof_migration(Vp, dV, dataS, n_of_shots, t, dt, plot=True,
                        loadfile=True, travelTime=None, dx=24, dz=24):
 
     if loadfile:
@@ -551,10 +553,10 @@ def kirchhof_migration(Vp, dV, dataS, n_of_shots, t, dt, plot=False,
 
     for ixs in range(n_of_shots):
         if loadfile:
-            shot = load_file('shotfdmS%s.dat' % ixs, (2668, 100))
+            shot = load_file('shotfdmS%s.dat' % str(ixs+1), (2668, 100))
         else:
             shot = dataS.copy()
-        print('Migrating shot %s/%s ' % (ixs, n_of_shots))
+        print('Migrating shot %s/%s ' % (str(ixs+1), n_of_shots))
         M = ShotKirchPSDM_v2(travelTime, shot, dt, dz, nz, ixs, dx, nx,
                              8.0, 0.02)
         MM[:, :, ixs] = M
@@ -586,8 +588,66 @@ def update_progress(progress):
         progress = 1
         status = "Done...\r\n"
     block = int(round(barLength*progress))
-    text = "\rProgress: [{0}] {1:6.1f}% {2}"
+    text = "\rProgress: [{0}] {1:6.0f}% {2}"
     text = text.format("#"*block + "-"*(barLength-block),
                        progress*100, status)
     sys.stdout.write(text)
     sys.stdout.flush()
+
+
+def reverse_time_migration(Vp, Vp0, dataS, n_of_shots, t, dt, nt, tmax='all',
+                           plot=True, loadfile=True, travelTime=None,
+                           dx=24, dz=24):
+    """
+    tmax: 'all' or float between 0-1
+    """
+    dV = Vp - Vp0
+    if loadfile:
+        travelTime = load_file('travelTime.dat', (100, 100, 100))
+    else:
+        if travelTime is None:
+            raise IOError('No travelTime data given')
+
+    nz, nx = Vp.shape
+
+    for ixs in range(n_of_shots):
+        if loadfile:
+            shape = (2668, 100)
+            dataS = load_file('shotfdmS%s.dat' % str(ixs+1), shape)
+            shape = (120, 140, 2668)
+            snapshot0 = load_file('snapshot0%s.dat' % str(ixs+1), shape)
+
+        shot = np.zeros((Vp.shape[1], nt))
+        shot[21:-20, :] = dataS.transpose().copy()
+        ntmig = shot.shape[1]
+
+        print('Migrating shot %s/%s ' % (str(ixs+1), n_of_shots))
+        rtmsnapshot = rtmod2d(Vp0, shot, nz, dz, nx, dx, ntmig, dt)
+
+        M = np.zeros(snapshot0.shape[:2])
+        s2 = np.zeros(snapshot0.shape[:2])
+        if tmax == 'all':
+            t = t[-1]
+        for i in np.arange(nt, step=10):
+            if t[nt-i] < tmax:
+                M += snapshot0[:, :, nt-i] * rtmsnapshot[:, :, nt-i]
+                s2 += np.power(snapshot0[:, :, i], 2)
+
+        if plot:
+            Mdiff = np.diff(M[:-19, 21:-19], 2, 0)
+            ss0 = snapshot0[:-19, 21:-19, int(nt-i)]
+            rtm = rtmsnapshot[:-19, 21:-19, int(nt-i)]
+            if ixs == 0:
+                hshot, fig, ax = plot_rtmigration(dV, ss0, rtm,
+                                                  Mdiff, shot, 0, t, nt, dx,
+                                                  dz, init=True)
+            else:
+                hshot, fig, ax = plot_rtmigration(dV, ss0, rtm,
+                                                  Mdiff, shot, 0, t, nt, dx,
+                                                  dz, init=True)
+
+    return
+
+
+def rtmod2d():
+    return
