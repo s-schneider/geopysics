@@ -595,20 +595,19 @@ def update_progress(progress):
     sys.stdout.flush()
 
 
-def reverse_time_migration(Vp, Vp0, dataS, n_of_shots, t, dt, nt, tmax='all',
-                           plot=True, loadfile=True, travelTime=None,
-                           dx=24, dz=24):
+def reverse_time_migration(Vm, Vm0, dV, dataS, n_of_shots, t, dt, nt,
+                           tmax='all', plot=True, loadfile=True,
+                           travelTime=None, dx=24, dz=24):
     """
     tmax: 'all' or float between 0-1
     """
-    dV = Vp - Vp0
     if loadfile:
         travelTime = load_file('travelTime.dat', (100, 100, 100))
     else:
         if travelTime is None:
             raise IOError('No travelTime data given')
 
-    nz, nx = Vp.shape
+    nz, nx = Vm.shape
 
     for ixs in range(n_of_shots):
         if loadfile:
@@ -617,12 +616,12 @@ def reverse_time_migration(Vp, Vp0, dataS, n_of_shots, t, dt, nt, tmax='all',
             shape = (120, 140, 2668)
             snapshot0 = load_file('snapshot0%s.dat' % str(ixs+1), shape)
 
-        shot = np.zeros((Vp.shape[1], nt))
-        shot[21:-20, :] = dataS.transpose().copy()
+        shot = np.zeros((nx, nt))
+        shot[21:-19, :] = dataS.transpose().copy()
         ntmig = shot.shape[1]
 
         print('Migrating shot %s/%s ' % (str(ixs+1), n_of_shots))
-        rtmsnapshot = rtmod2d(Vp0, shot, nz, dz, nx, dx, ntmig, dt)
+        rtmsnapshot = rtmod2d(Vm0, shot, nz, dz, nx, dx, ntmig, dt)
 
         M = np.zeros(snapshot0.shape[:2])
         s2 = np.zeros(snapshot0.shape[:2])
@@ -645,9 +644,165 @@ def reverse_time_migration(Vp, Vp0, dataS, n_of_shots, t, dt, nt, tmax='all',
                 hshot, fig, ax = plot_rtmigration(dV, ss0, rtm,
                                                   Mdiff, shot, 0, t, nt, dx,
                                                   dz, init=True)
-
     return
 
 
-def rtmod2d():
-    return
+def rtmod2d(v, data, nz, dz, nx, dx, nt, dt):
+    #
+    # data(nx,nt)       shot data matrix
+    # v(nz,nx)          velocity model
+    # nx                number of horizontal samples
+    # nz                number of depth samples
+    # nt                numer of time samples
+    # dx                horizontal distance per sample
+    # dz                depth distance per sample
+    # dt                time difference per sample
+
+    # add grid points for boundary condition
+    # v = [repmat(v(:,1),1,20), v, repmat(v(:,end),1,20)]
+    # v(end+20,:) = v(end,:)
+    # Initialize storage
+    nz, nx = v.shape
+    nt = data.shape[1]
+    fdm = np.zeros((nz, nx, 3))
+
+    # Boundary Absorbing Model
+    iz = np.arange(20)
+    boundary = np.power(np.exp(-(np.power(0.015*(19-iz), 2))), 10)
+
+    # Reverse-Time Migration
+    fdm[0, :, 0] = data[:, nt-1]
+    fdm[0, :, 1] = data[:, nt-2]
+    fdm[0, :, 2] = data[:, nt-3]
+
+    # finite difference coefficients
+    a = np.power((v*dt/dx), 2)    # wave equation coefficient
+    b = 2-4*a
+
+    # common indicies
+    #    ix = np.arange(1, nx-1)          # interior x
+    #    ixb = np.arange(20)              # boundary x (right)
+    #    ixb2 = np.arange(nx-20, nx)      # boundary x (left)
+
+    cz = 3
+    snapshot = np.zeros((nz, nx, nt+1))
+
+    for it in np.arange((nt-1), -1, -1):
+        cz += 1
+        bz = np.minimum(cz, nz)
+
+        # apply absorbing boundary condition on left/right sides
+        for iz in range(bz):
+            fdm[iz, 0:20, 0] = boundary * fdm[iz, 0:20, 0]
+            fdm[iz, 0:20, 1] = boundary * fdm[iz, 0:20, 1]
+            fdm[iz, nx-20:nx, 0] = boundary[::-1] * fdm[iz, nx-20:nx, 0]
+            fdm[iz, nx-20:nx, 1] = boundary[::-1] * fdm[iz, nx-20:nx, 1]
+
+        #  apply absorbing boundary condition at depth nz
+        if bz >= (nz-20):
+            for iz in np.arange(nz-20, bz):
+                fdm[iz, :, 0] = boundary[nz-iz-1] * fdm[iz, :, 0]
+                fdm[iz, :, 1] = boundary[nz-iz-1] * fdm[iz, :, 1]
+
+        # computing grid depth (extend in z to solve)
+        if bz == nz:
+            ez = nz-2
+        else:
+            ez = bz
+
+        # time extrapolation between iz and bz
+        fdm[0:bz, 1:nx-1, 2] = fdm[0:bz, 1:nx-1, 2] - fdm[0:bz, 1:nx-1, 0]
+
+        # iz = 2:ez
+        fdm[1:ez, 1:nx-1, 1] = (
+                                b[1:ez, 1:nx-1] * fdm[1:ez, 1:nx-1, 1]
+                                + fdm[1:ez, 1:nx-1, 2]
+                                + a[1:ez, 2:nx+1] * fdm[1:ez, 2:nx+1, 1]
+                                + a[1:ez, 0:nx-2] * fdm[1:ez, 0:nx-2, 1]
+                                + a[2:ez+1, 1:nx-1] * fdm[2:ez+1, 1:nx-1, 1]
+                                + a[0:ez-1, 1:nx-1] * fdm[0:ez-1, 1:nx-1, 1]
+                              )
+
+        # time extrapolation at iz = 1
+        fdm[0, 1:nx-1, 1] = (
+                                b[0, 1:nx-1] * fdm[0, 1:nx-1, 0]
+                                + fdm[0, 1:nx-1, 1]
+                                + a[0, 2:nx] * fdm[0, 2:nx, 0]
+                                + a[0, 0:nx-2] * fdm[0, 0:nx-2, 0]
+                                + a[1, 1:nx-1] * fdm[1, 1:nx-1, 0]
+                            )
+
+        if bz == nz:
+            # time extrapolation at iz = nz
+            fdm[nz-1, 1:nx-1, 2] = (
+                                b[nz-1, 1:nx-1] * fdm[nz-1, 1:nx-1, 0]
+                                + fdm[nz-1, 1:nx-1, 1]
+                                + a[nz-1, 2:nx] * fdm[nz-1, 2:nx, 0]
+                                + a[nz-1, 0:nx-2] * fdm[nz-1, 0:nx-2, 0]
+                                + a[nz-2, 1:nx-1] * fdm[nz-2, 1:nx-1, 0]
+                                )
+            # time extrapolation at corner [nz,1]
+            fdm[nz-1, 0, 1] = (
+                                b[nz-1, 0] * fdm[nz-1, 0, 0]
+                                + fdm[nz-1, 0, 1]
+                                + a[nz-1, 1] * fdm[nz-1, 1, 0]
+                                + a[nz-2, 0] * fdm[nz-2, 0, 0]
+                                )
+
+        fdm[1:ez, 0, 1] = (
+                            b[1:ez, 0] * fdm[1:ez, 0, 0]
+                            + fdm[1:ez, 0, 1]
+                            + a[1:ez, 1] * fdm[1:ez, 1, 0]
+                            + a[2:ez+1, 0] * fdm[2:ez+1, 0, 0]
+                            + a[0:ez-1, 0] * fdm[0:ez-1, 0, 0]
+                            )
+
+        fdm[1:ez, nx-1, 1] = (
+                        b[1:ez, nx-1] * fdm[1:ez, nx-1, 0]
+                        + fdm[1:ez, nx-1, 1]
+                        + a[1:ez, nx-2] * fdm[1:ez, nx-2, 0]
+                        + a[2:ez+1, nx-1] * fdm[2:ez+1, nx-1, 0]
+                        + a[0:ez-1, nx-1] * fdm[0:ez-1, nx-1, 0]
+                        )
+
+        # time extrapolation at corner [1,1]
+        fdm[0, 0, 1] = (
+                        b[0, 0] * fdm[0, 0, 0]
+                        + fdm[0, 0, 1]
+                        + a[0, 1] * fdm[0, 1, 0]
+                        + a[1, 0] * fdm[1, 0, 0]
+                        )
+
+        # time extrapolation at corner [1,nx]
+        fdm[0, nx-1, 1] = (
+                        b[0, nx-1] * fdm[0, nx-1, 0]
+                        + fdm[0, nx-1, 1]
+                        + a[0, nx-2] * fdm[0, nx-2, 0]
+                        + a[1, nx-1] * fdm[1, nx-1, 0]
+                        )
+
+        # set up fdm for next iteration
+        fdm[:, :, 0] = fdm[:, :, 1]
+        fdm[:, :, 1] = fdm[:, :, 2]
+
+        # insert surface boundary wavefield
+        if it > 2:
+            fdm[1:nz+1, :, 2] = np.zeros(fdm[1:nz+1, :, 2].shape)
+            fdm[0, :, 2] = data[:, it-1]
+
+        snapshot[:, :, it] = fdm[:, :, 0]
+
+        if it == nt-1:
+            im = plt.imshow(fdm[:, :, 0])
+            plt.show()
+            plt.pause(0.0005)
+        else:
+            im.set_data(fdm[:, :, 0])
+            im.autoscale()
+            plt.draw()
+            plt.pause(0.0005)
+        update_progress((nt-1-it)/float(nt-2))
+
+    # write out final wavefield
+    model = fdm[:, :, 1]
+    return model
