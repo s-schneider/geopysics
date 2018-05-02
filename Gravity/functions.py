@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import sys
 
 """
 v 1.0
@@ -291,3 +292,25 @@ def mHollowSphere(a=3, b=6, N=250):
         elif r[i] >= b:
             g[i] = 1/np.power(r[i], 2)
     return r, g
+
+
+def update_progress(progress):
+    barLength = 56 # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+        status = "error: progress var must be float\r\n"
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength*progress))
+    text = "\rPercent: [{0}] {1:6.1f}% {2}"
+    text = text.format( "#"*block + "-"*(barLength-block),
+                        progress*100, status)
+    sys.stdout.write(text)
+    sys.stdout.flush()

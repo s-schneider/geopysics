@@ -206,3 +206,53 @@ def plot_travel_times(Vp0, shot_x, ixs, dx, dz, travelTime=None, init=False,
    
 
     return fig, ax, hshot, im_tT
+
+
+def plot_migration(dV, Stacked, shot, M, i, t, dx, dz, hshot=None, init=False,
+                   fig=None, ax=None):
+
+    nz, nx = dV.shape
+    x = np.arange(1, nx+1) * dx
+    z = np.arange(1, nz+1) * dz
+
+    if fig is None:
+        fig = plt.figure()
+        gs = gridspec.GridSpec(5, 5)
+        ax = range(4)
+
+    ax[0] = plt.subplot(gs[0:2, 0:2])
+    ax[0].imshow(dV, extent=(dx, nx*dx, nz*dz, dz), cmap='gray',
+                 vmin=-1000, vmax=1000)
+    ax[0].set_xlabel('Distance (m)')
+    ax[0].set_ylabel('Depth (m)')
+    ax[0].set_title(r'$\delta c(x)$')
+    if init:
+        hshot = ax[0].plot(x[0], z[0], '*', color='white')[0]
+    else:
+        hshot.set_xdata(x[i])
+
+    ax[1] = plt.subplot(gs[0:2, 3:5])
+    im1 = ax[1].imshow(Stacked, extent=(dx, nx*dx, t.max(), 0), aspect='auto',
+                       cmap='gray', vmin=-20, vmax=20)
+    ax[1].set_xlabel('Distance (m)')
+    ax[1].set_ylabel('Time (s)')
+    ax[1].set_title(r'Stacked Image')
+    fig.colorbar(im1, ax=ax[1])
+
+    ax[2] = plt.subplot(gs[3:5, 0:2])
+    im2 = ax[2].imshow(shot, extent=(dx, nx*dx, t.max(), 0), aspect='auto',
+                       cmap='gray', vmin=-.3, vmax=.3)
+    ax[2].set_xlabel('Distance (m)')
+    ax[2].set_ylabel('Time (s)')
+    ax[2].set_title(r'Current Shot %s' % i)
+    fig.colorbar(im2, ax=ax[2])
+
+    ax[3] = plt.subplot(gs[3:5, 3:5])
+    im3 = ax[3].imshow(M, extent=(dx, nx*dx, t.max(), 0), aspect='auto',
+                       cmap='gray', vmin=-20, vmax=20)
+    ax[3].set_xlabel('Distance (m)')
+    ax[3].set_ylabel('Time (s)')
+    ax[3].set_title(r'Current Migrated Shot %s' % i)
+    fig.colorbar(im3, ax=ax[3])
+
+    return hshot, fig, ax

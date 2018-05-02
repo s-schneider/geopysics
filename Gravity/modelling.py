@@ -1,6 +1,7 @@
 import numpy as np
 import sys
-from Gravity.functions import mPrismCart, mpoinCart, mHollowSphere
+from Gravity.functions import (mPrismCart, mpoinCart, mHollowSphere,
+                               update_progress)
 from Gravity.plotting import plot_gravity, plot_hollow_sphere
 
 
@@ -46,13 +47,7 @@ def model_gravity(object='all', scal=1):
     Vz2 = np.zeros((x.size, y.size))
     P2 = np.zeros((x.size, y.size))
 
-    # setup toolbar
-    waitbar_width = 56
-    d_waitbar = np.ceil(len(y)/float(waitbar_width))
-    sys.stdout.write("0 |%s| 100%%" % (" " * waitbar_width))
-    sys.stdout.flush()
-    sys.stdout.write("\b" * (waitbar_width+1))
-
+    update_progress(0)
     for j, v in enumerate(y):
         for i, w in enumerate(x):
             if object in ['prisma', 'all']:
@@ -64,11 +59,7 @@ def model_gravity(object='all', scal=1):
                 V = mpoinCart(x[i], y[j], z, mass)
                 Vxx2[i, j], Vxy2[i, j], Vxz2[i, j], Vyy2[i, j] = V[:4]
                 Vyz2[i, j], Vzz2[i, j], P2[i, j], Vz2[i, j] = V[4:]
-        # g = waitbar(j/length(x))
-        if j % d_waitbar == 0:
-            sys.stdout.write("-")
-            sys.stdout.flush()
-
+        update_progress(j/float(len(x)))
     sys.stdout.write("\n")
 
     if object in ['prisma', 'all']:

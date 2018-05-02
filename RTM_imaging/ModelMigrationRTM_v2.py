@@ -1,5 +1,6 @@
 from RTM_imaging.functions import (generate_shots, load_model, set_FD_params,
-                                   generate_traveltimes)
+                                   generate_traveltimes,
+                                   kirchhof_migration)
 from RTM_imaging.plotting import (plot_velocity_model,
                                   plot_scattered_wave_data)
 
@@ -20,10 +21,10 @@ Read in velocity model data and plot it
 model_name = 'migration'
 
 Vp, Vp0 = load_model(model_name)
-
+dV = Vp - Vp0
 dx = 24
 dz = 24
-
+shots = 1
 plot_velocity_model(Vp, Vp0, dx, dz)
 
 """
@@ -47,7 +48,8 @@ PART 3 :
 
 Generate shots and save to file
 """
-data, data0 = generate_shots(Vp, Vm, Vm0, t, dt, nt, shots=1, animation=False)
+data, data0 = generate_shots(Vp, Vm, Vm0, t, dt, nt, shots=shots,
+                             animation=False, save=True)
 
 
 """
@@ -64,70 +66,18 @@ PART 5 :
 Traveltime by 2D ray-tracing
 Generate the traveltime field for all z = 0 locations
 """
-travelTime = generate_traveltimes(Vp0)
+travelTime = generate_traveltimes(Vp0, plot=False, save=True)
 
 
 """
 PART 6 :
 Process Shots - Kirchhoff Migration
 """
+dataS = data - data0
+kirchhof_migration(Vp, dV, dataS, shots, t, dt)
 
-#stack, = kirchof_migration()
 
 """
-%vidObj = VideoWriter('videos\FaultModelKirchhoff.avi');
-%open(vidObj);
-%load('travelTime.mat');
-Stacked = zeros(nz,nx);
-figure(gcf)
-subplot(2,2,1)
-imagesc(x,z,dV)
-xlabel('Distance (m)'); ylabel('Depth (m)');
-title('{\delta}c(x)');
-caxis([-1000 1000])
-hold on
-hshot = plot(x(1),z(1),'w*');
-hold off
-
-colormap  seismic %bone
-colormap  gray %bone
-nxii = nxi;
-%nxii = nx;
-Stacked=0;
-MM = zeros(nz,nx,nxii);
-for ixs = 1:nxii
-    %load(['shotfdmS',num2str(ixs),'.mat'])
-    %shot = dataS(21:end-20,:);
-    shot = dataS(:,:);
-    M = ShotKirchPSDM_v2(travelTime,shot,dt,dz,nz,ixs,dx,nx,8.0,0.02);
-    MM(:,:,ixs) = M;
-    Stacked = sum(MM,3)/nxii;
-
-    subplot(2,2,2)
-    imagesc(x,z,Stacked)
-    xlabel('Distance (m)'); ylabel('Depth (m)');
-    title('Stacked Image');
-    caxis([-20 20])
-
-    subplot(2,2,3)
-    imagesc(x,t,shot)
-    xlabel('Distance (m)'); ylabel('Time (s)');
-    title(['Current Shot ',num2str(ixs)]);
-    caxis([-0.3 0.3])
-
-    subplot(2,2,4)
-    imagesc(x,t,M)
-    xlabel('Distance (m)'); ylabel('Time (s)');
-    title(['Current Migrated Shot ',num2str(ixs)]);
-    caxis([-20 20])
-
-    set(hshot,'XData',x(ixs));
-
-    drawnow
-    %writeVideo(vidObj,getframe(gcf));
-end
-%close(vidObj);
-
 %%
 %%%%
 %%%% PART 7 :

@@ -1,18 +1,18 @@
 from RTM_imaging.data import Marmousi, migration
 from RTM_imaging.plotting import (_init_shot_plot, plot_initial_wavefield,
                                   plot_wavefield_animation,
-                                  plot_travel_times)
+                                  plot_travel_times, plot_migration)
 import numpy as np
 import scipy.io
 import matplotlib.pyplot as plt
 import time
+import sys
 
 
 # Data source
 
 migration_path = migration.__path__[0]
 marmousi_path = Marmousi.__path__[0]
-
 
 
 def load_model(type):
@@ -170,7 +170,7 @@ def ricker(f=None, n=None, dt=None, t0=None, t1=None):
 
 
 def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
-                   shots=1):
+                   shots=1, save=True):
     f = 60.
     nz, nx = Vp.shape[:]
     x = np.arange(1, nx+1) * dx
@@ -187,13 +187,13 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
 
         # generate shot records
         tic = time.time()
-        [data, snapshot] = fm2d(Vm, rw, dz, dx, nt, dt)
+        data, snapshot = fm2d(Vm, rw, dz, dx, nt, dt)
         toc = time.time()
         msg = "Elapsed time is %s seconds." % (toc-tic)
         print(msg)
 
         tic = time.time()
-        [data0, snapshot0] = fm2d(Vm0, rw, dz, dx, nt, dt)
+        data0, snapshot0 = fm2d(Vm0, rw, dz, dx, nt, dt)
         toc = time.time()
         msg = "Elapsed time is %s seconds." % (toc-tic)
         print(msg)
@@ -201,12 +201,16 @@ def generate_shots(Vp, Vm, Vm0, t, dt, nt, dx=24, dz=24, animation=True,
         data = data.transpose()  # [21:-20, :]
         data0 = data0.transpose()  # [21:-20, :]
 
+        if save:
+            save_file(snapshot0, "snapshot0%s.dat" % ixs-20)
+            save_file(data, "shotfdm%s.dat" % ixs-20)
+            save_file(data-data0, "shotfdmS%s.dat" % ixs-20)
+
         # plot initial wavefield
         ax = plot_initial_wavefield(hshot, ax, dx, dz, nx, nz, ixs-20,
                                     x[ixs-20],  rw[:-20, 21:-20])
 
         plt.pause(0.01)
-#            colormap(seismic(1024))
 
         if ixs-20 in [1, nx/2, nx]:
             start = 0
@@ -365,7 +369,7 @@ def fm2d(v, model, dz, dx, nt, dt):
     return data, snapshot
 
 
-def generate_traveltimes(Vp0, dx=24, dz=24, plot=True):
+def generate_traveltimes(Vp0, dx=24, dz=24, plot=True, save=True):
 
     nz, nx = Vp0.shape[:]
     x = np.arange(1, nx+1) * dx
@@ -384,6 +388,12 @@ def generate_traveltimes(Vp0, dx=24, dz=24, plot=True):
                                                       ax=ax, fig=fig,
                                                       im_tT=im_tT,
                                                       hshot=hshot)
+        else:
+            update_progress(ixs/float((nx-1)))
+
+    if save:
+        save_file(travelTime, 'travelTime.dat')
+
     return travelTime
 
 
@@ -394,7 +404,7 @@ def ray2d(V, Shot, dx):
     """
     # load dA
     dA = scipy.io.loadmat('%s/dA.mat' % migration_path)['dA']
-    dA= dA.reshape(169, 144)
+    dA = dA.reshape(169, 144)
     # Constants
     v0 = 10000.
     sz = 6
@@ -440,7 +450,7 @@ def ray2d(V, Shot, dx):
         if not indx.any():
             indx = M == 0
 
-        idz, idx = np.where(indx is True)
+        idz, idx = np.where(indx == True)
         M[indx] = v0
 
         for z, x in zip(idz, idx):
@@ -458,3 +468,126 @@ def ray2d(V, Shot, dx):
 
     T = T[sz:nz+sz, sx:nx+sx]*dx
     return T
+
+
+def ShotKirchPSDM_v2(travelTime, shot, dt, dz, nz, ixs, dx, nx, aper2depth,
+                     twin):
+
+    """
+     Migrate a shot record for a given travel time between shot (source) and
+     gather (receiver) using a simple Kirchoff Migration algorithm
+
+     Inputs:
+       travelTime      travel time array
+       shot            shot array (nz,nx)
+       dt              sampling time
+       nz,nx              number of samples in z,x directions
+       ixs             shot location in shot
+       aper2depth      maximum aperturture-to-depth ratio
+       twin            time window to sum over
+
+     Outputs:
+       m               migrated image (nz,nx)
+    """
+    nt, nr = shot.shape
+    if nr != nx:
+        raise IOError('number of receivers must be equal to nx!')
+
+    m = np.zeros((nz, nx))
+    itwin = np.round((twin/2)/dt)
+
+    for iz in range(nz):  # loop over depth points
+        for ix in range(nx):
+            # get traveltime to shot
+            soutt = travelTime[iz, ix, ixs]
+            # maximum aperture
+            apmax = aper2depth * iz * dz
+
+            # loop over receivers
+            for ixr in range(nr):
+                if ixr*dx < apmax:  # if offset smaller than max aperture
+                    # get traveltime to receiver
+                    rectt = travelTime[iz, ix, ixr]
+                    # total traveltime, rounded for time index
+                    it = np.round((soutt + rectt) / dt) + 1
+                    # image contribution
+                    for itt in range(int(2*itwin)):
+                        sind = int(it-itwin+itt-1)
+                        if sind > 0 and sind < nt:
+                            m[iz, ix] += shot[sind, ixr]/(2*itwin)
+        update_progress(iz/float(nz-1))
+
+    return m
+
+
+def save_file(x, filename):
+    with open(filename, 'wb') as fh:
+        x.tofile(fh)
+    return
+
+
+def load_file(filename, shape):
+    """
+    shape of shotfiles: 2668, 100
+    shape of travelTime: 100, 100, 100
+    """
+    x = np.fromfile(filename)
+    x = x.reshape(shape)
+    return x
+
+
+def kirchhof_migration(Vp, dV, dataS, n_of_shots, t, dt, plot=False,
+                       loadfile=True, travelTime=None, dx=24, dz=24):
+
+    if loadfile:
+        travelTime = load_file('travelTime.dat', (100, 100, 100))
+    else:
+        if travelTime is None:
+            raise IOError('No travelTime data given')
+
+    nz, nx = Vp.shape
+    Stacked = np.zeros((nz, nx))
+    MM = np.zeros((nz, nx, n_of_shots))
+
+    for ixs in range(n_of_shots):
+        if loadfile:
+            shot = load_file('shotfdmS%s.dat' % ixs, (2668, 100))
+        else:
+            shot = dataS.copy()
+        print('Migrating shot %s/%s ' % (ixs, n_of_shots))
+        M = ShotKirchPSDM_v2(travelTime, shot, dt, dz, nz, ixs, dx, nx,
+                             8.0, 0.02)
+        MM[:, :, ixs] = M
+        Stacked = np.sum(MM, 2)/n_of_shots
+
+        if plot:
+            if ixs == 0:
+                hshot, fig, ax = plot_migration(dV, Stacked, shot, M, 0, t, dx,
+                                                dz, init=True)
+            else:
+                hshot, fig, ax = plot_migration(dV, Stacked, shot, M, ixs, t,
+                                                dx, dz, hshot, fig, ax)
+
+    return Stacked
+
+
+def update_progress(progress):
+    barLength = 56  # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+        status = "error: progress var must be float\r\n"
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength*progress))
+    text = "\rProgress: [{0}] {1:6.1f}% {2}"
+    text = text.format("#"*block + "-"*(barLength-block),
+                       progress*100, status)
+    sys.stdout.write(text)
+    sys.stdout.flush()
