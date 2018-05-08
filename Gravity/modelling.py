@@ -15,7 +15,7 @@ v 1.0
 """
 
 
-def model_gravity(object='all', scal=1):
+def model_gravity(object='all', scal=1, plotting=True):
     """
     object: 'prisma', 'point' or 'all'
     """
@@ -62,12 +62,13 @@ def model_gravity(object='all', scal=1):
         update_progress(j/float(len(x)))
     sys.stdout.write("\n")
 
-    if object in ['prisma', 'all']:
-        title = 'Prism-Mass Model | height = %f m' % z
-        plot_gravity(Vxx1, Vxy1, Vxz1, Vyy1, Vyz1, Vzz1, P1, Vz1, title)
-    if object in ['point', 'all']:
-        title = 'Point-Mass Model | height = %f m' % z
-        plot_gravity(Vxx2, Vxy2, Vxz2, Vyy2, Vyz2, Vzz2, P2, Vz2, title)
+    if plotting:
+        if object in ['prisma', 'all']:
+            title = 'Prism-Mass Model | height = %f m' % z
+            plot_gravity(Vxx1, Vxy1, Vxz1, Vyy1, Vyz1, Vzz1, P1, Vz1, title)
+        if object in ['point', 'all']:
+            title = 'Point-Mass Model | height = %f m' % z
+            plot_gravity(Vxx2, Vxy2, Vxz2, Vyy2, Vyz2, Vzz2, P2, Vz2, title)
     return
 
 
