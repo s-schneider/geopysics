@@ -69,7 +69,10 @@ def model_gravity(object='all', scal=1, plotting=True):
         if object in ['point', 'all']:
             title = 'Point-Mass Model | height = %f m' % z
             plot_gravity(Vxx2, Vxy2, Vxz2, Vyy2, Vyz2, Vzz2, P2, Vz2, title)
-    return
+    if object == 'prisma':
+        return Vxx1, Vxy1, Vxz1, Vyy1, Vyz1, Vzz1, P1, Vz1
+    elif object == 'point':
+        return Vxx2, Vxy2, Vxz2, Vyy2, Vyz2, Vzz2, P2, Vz2
 
 
 def hollow_sphere(a=3, b=6):
